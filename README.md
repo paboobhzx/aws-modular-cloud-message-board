@@ -60,4 +60,4 @@ The application is a dynamic "Message Board" where EC2 instances fetch data from
     ```
 
 5.  **Verify:**
-    Access the web server using the Public IP from the AWS Console to see the message served securely from DynamoDB.
+    Access the web server using the Public IP from the AWS Console to see the message served securely from DynamoDB.git
