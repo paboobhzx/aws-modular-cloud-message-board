@@ -1,63 +1,90 @@
-# Modular AWS Cloud Infrastructure ("The Cloud Message Board")
+# ☁️ Cloud Message Board (AWS ECS Fargate)
 
-## 🚀 Project Overview
-A fully modular Terraform project that deploys a secure, self-healing web application on AWS. It demonstrates **Infrastructure as Code (IaC)** best practices, including custom networking, least-privilege IAM roles, and private connectivity strategies.
+A Full-Stack, containerized 3-tier application deployed on AWS using Infrastructure as Code (Terraform). 
 
-I built this project to move beyond "Hello World" tutorials and simulate a real-world platform engineering environment. I refactored a monolithic Terraform configuration into reusable modules (`networking`, `compute`, `database`, `storage`) to ensure scalability and maintainability.
+This project demonstrates a **Cloud-Native workflow**: containerizing a Node.js application, pushing it to an AWS Registry (ECR), and orchestrating it via ECS Fargate with a persistent RDS MySQL database backend.
 
-The application is a dynamic "Message Board" where EC2 instances fetch data from a **DynamoDB** table and display it on a webpage.
+---
 
-## 🏗 Architecture Highlights
+## 🏗️ Architecture
+This project utilizes a **Cost-Optimized 3-Tier Architecture** designed to run in a real AWS environment while minimizing infrastructure overhead.
 
-### 1. Secure Networking
-* **VPC Gateway Endpoint:** Connects EC2 instances to DynamoDB privately. Database traffic stays within the AWS internal network and never traverses the public internet, reducing latency and exposure.
-* **Custom VPC:** Deployed with public subnets and strict routing tables.
+* **Tier 1 (Traffic):** Public-facing Application Load Balancer (ALB) handles ingress traffic and performs health checks.
+* **Tier 2 (Compute):** AWS ECS (Fargate) runs the stateless Node.js containers. It is configured for zero-maintenance serverless compute.
+* **Tier 3 (Data):** AWS RDS (MySQL) provides persistent storage. The database is secured via Security Group chaining (only the App Tier can access port 3306).
 
-### 2. Zero-Trust Security
-* **IAM Roles (Least Privilege):** No hardcoded AWS credentials (access keys) are used.
-* **Granular Permissions:** Instances assume an IAM Role that grants permission *only* to read specific DynamoDB tables and modify their own tags.
+### 🛠️ Tech Stack
+* **Application:** Node.js (Express), MySQL2
+* **Infrastructure:** Terraform (Modular Design)
+* **Containerization:** Docker & AWS ECR
+* **Cloud Provider:** AWS (ECS, Fargate, RDS, VPC, IAM)
 
-### 3. Self-Healing Compute
-* **Auto Scaling Group (ASG):** Monitors instance health and automatically provisions replacements if a server fails.
-* **Launch Templates:** Defines the "Golden Image" configuration for all web servers.
+---
 
-### 4. Dynamic Bootstrapping
-* **IMDSv2 Integration:** A custom `user_data` script interacts with the EC2 Instance Metadata Service (Version 2) to fetch instance details secureley.
-* **Self-Tagging:** Instances dynamically rename themselves (e.g., `Portfolio-Web-i-0abc...`) upon launch for easier observability.
+## ⚠️ Cost Warning (Paid Resources)
+This project deploys **real enterprise-grade infrastructure**, not just free-tier resources. If you deploy this, you will incur costs on your AWS bill:
 
-## 🛠 Technical Stack
+* **Application Load Balancer (ALB):** ~$0.0225 per hour (~$16/month).
+* **AWS Fargate:** Charged per vCPU/Memory minute while running.
+* **RDS MySQL:** Free Tier eligible (if applicable), otherwise standard hourly rates.
 
-| Component | Technology |
-| :--- | :--- |
-| **IaC** | Terraform (Modular) |
-| **Cloud Provider** | AWS (us-east-1) |
-| **Compute** | EC2, ASG, Launch Templates |
-| **Database** | DynamoDB (Serverless, NoSQL) |
-| **Networking** | VPC, Route Tables, Gateway Endpoints |
-| **Storage** | S3 (Versioning Enabled) |
+**Recommendation:** Run `terraform destroy` immediately after testing to stop the billing clock.
 
-## 💻 How to Deploy
+---
 
-1.  **Clone the repository:**
-    ```bash
-    git clone [https://github.com/paboobhzx/aws-modular-cloud-message-board.git](https://github.com/paboobhzx/aws-modular-cloud-message-board.git)
-    ```
-    *(Note: Update URL if you renamed the repo)*
+## 🚀 Key Features
+* **Self-Healing Infrastructure:** The ALB monitors container health. If the application crashes or becomes unresponsive, ECS automatically replaces the failed task.
+* **Automated Database Migration:** No manual SQL scripts required. The application detects a fresh database on startup and automatically injects the required schema and tables.
+* **Infrastructure as Code (IaC):** The entire environment (VPC, Security Groups, IAM Roles, Database, Compute) is defined in Terraform modules.
+* **Zero-Downtime Updates:** The architecture supports rolling updates.
 
-2.  **Initialize Terraform:**
-    ```bash
-    terraform init
-    ```
+---
 
-3.  **Review the Plan:**
-    ```bash
-    terraform plan
-    ```
+## ⚙️ How to Deploy
 
-4.  **Deploy:**
-    ```bash
-    terraform apply --auto-approve
-    ```
+### Prerequisites
+* AWS CLI (Configured with credentials)
+* Terraform
+* Docker (Running locally)
+### Step 1: Build & Push Image
 
-5.  **Verify:**
-    Access the web server using the Public IP from the AWS Console to see the message served securely from DynamoDB.git
+
+### Step 1: Build & Push Image
+Run these commands inside the `cloud-message-board` folder to package the app and send it to AWS ECR.
+
+```bash
+cd cloud-message-board
+
+# 1. Login to ECR (Replace with your Region/Account ID)
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <YOUR_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
+
+# 2. Build the Docker Image (For Linux/AMD64 architecture)
+docker build --platform linux/amd64 -t cloud-message-board .
+
+# 3. Tag and Push (Replace <YOUR_REPO_URL> with your ECR URL)
+docker tag cloud-message-board:latest <YOUR_REPO_URL>:v5
+docker push <YOUR_REPO_URL>:v5
+```
+### Step 2: Deploy the infrastructure
+Run these commands inside the infrastructure folder to build the AWS environment.
+
+```
+cd infrastructure
+# 1. Initialize Terraform
+terraform init
+
+# 2. Apply the configuration
+terraform apply --auto-approve
+```
+### Step 3: Access the App
+```
+terraform output load_balancer_url
+Copy the URL (e.g., http://ecs-alb-12345.us-east-1.elb.amazonaws.com).
+Paste it into your browser to verify the application is running.
+```
+
+Clean Up
+To avoid ongoing AWS charges, destroy the infrastructure when finished:
+```
+cd infrastructure
+terraform destroy --auto-approve
